@@ -6,10 +6,89 @@ import pandas as pd
 import os
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+from matplotlib import cm, colors, colorbar
+
+# color and size definitions for plots
+
+fontsize_normal = 6
+plt.rcParams.update({
+    'text.usetex': False,
+    'svg.fonttype': 'none',
+    'font.family': 'sans-serif',
+    'font.serif': 'FreeSerif',
+    'font.monospace': 'Computer Modern Typewriter',
+    'text.latex.preamble': r'\usepackage{sansmath}\sansmath',
+    'font.size': fontsize_normal
+})
+
+centimeter = 1 / 2.54  # convert inches to cm
+
+maxfigurewidth = 18 * centimeter
+smallfigurewidth = maxfigurewidth / 3
+mediumfigurewidth = maxfigurewidth / 2
 
 # TODO: adjust these path to your data
 basepath = "/home/quante/Documents/projects/IAM-stochasticity-discounting/"
 datapath = os.path.join(basepath, "data")
+
+figurepath = os.path.join(basepath, "figures")
+# create figure dir if it does not exist
+if not os.path.exists(figurepath):
+    os.makedirs(figurepath)
+
+# plot on cost sensitivity data
+file = "202312_CostSensitivity-reduced.csv"
+sensitivity_data = pd.read_csv(os.path.join(datapath, file))
+
+timelimit = 350
+
+abatementSensitivity = sensitivity_data["abatementSensitivityWeighted mean"][:timelimit]
+damageSensitivity = sensitivity_data["damageSensitivityWeighted mean"][:timelimit]
+
+abatementColor = (108/255, 188/255, 144/255, 1)
+damageColor = (253/255, 141/255, 60/255, 1)
+
+# plot abatement and damage sensitivity weighted by cost to value weight and discount factor in the same plot, using a darkish green and darkish red color
+fig, ax = plt.subplots(figsize=(maxfigurewidth, maxfigurewidth/2))
+ax.plot(abatementSensitivity, color=abatementColor)
+ax.plot(damageSensitivity, color=damageColor)
+
+# Fill area below the curves with a light shade
+ax.fill_between(range(timelimit), abatementSensitivity,
+                color=abatementColor, alpha=0.3)
+ax.fill_between(range(timelimit), damageSensitivity,
+                color=damageColor, alpha=0.3)
+
+# add a vertical line at the maxima of the curves
+ax.axvline(x=abatementSensitivity.idxmin(),
+           color=abatementColor, linestyle='--', linewidth=0.5)
+ax.axvline(x=damageSensitivity.idxmax(), color=damageColor,
+           linestyle='--', linewidth=0.5)
+
+# Draw horizontal line between min and max
+min_x = abatementSensitivity.idxmin()
+max_x = damageSensitivity.idxmax()
+min_y = abatementSensitivity[min_x]
+max_y = damageSensitivity[max_x]
+ax.hlines(0, min_x, max_x, color='black', linewidth=0.5)
+
+# Draw small vertical lines at min and max
+ax.vlines(min_x, -20, 20, color='black', linewidth=0.5)
+ax.vlines(max_x, -20, 20, color='black', linewidth=0.5)
+
+ax.annotate("abatement-damage shift", xy=((abatementSensitivity.idxmin() +
+            damageSensitivity.idxmax()) / 2, -60), ha='center', va='center')
+
+ax.set_xlim([0, timelimit])
+ax.set_xlabel('Time t')
+ax.set_ylabel(
+    'Cost sensitivity: $\\frac{d C}{d T} \\frac{d V}{d C} \\frac{N(0)}{N(t)}$')
+
+plt.savefig(os.path.join(
+    figurepath, "cost_sensitivity_abatement_damage_weighted.pdf"), dpi=300, bbox_inches='tight')
+
+
+# plots on simulation data
 
 fileident = "202312_CostOverTime"
 datadict = {"DICE-2016-R": "full", "Abatement cost funding": "funding20",
@@ -30,32 +109,6 @@ for variable in variables:
     keys[variable] = {}
     for sub_key in sub_keys:
         keys[variable][sub_key] = "{} {}".format(variable, sub_key)
-
-
-figurepath = os.path.join(basepath, "figures")
-# create figure dir if it does not exist
-if not os.path.exists(figurepath):
-    os.makedirs(figurepath)
-
-
-# color and size definitions for plots
-
-fontsize_normal = 6
-plt.rcParams.update({
-    'text.usetex': False,
-    'svg.fonttype': 'none',
-    'font.family': 'sans-serif',
-    'font.serif': 'FreeSerif',
-    'font.monospace': 'Computer Modern Typewriter',
-    'text.latex.preamble': r'\usepackage{sansmath}\sansmath',
-    'font.size': fontsize_normal
-})
-
-centimeter = 1 / 2.54  # convert inches to cm
-
-maxfigurewidth = 18 * centimeter
-smallfigurewidth = maxfigurewidth / 3
-mediumfigurewidth = maxfigurewidth / 2
 
 # colors as in schematic figure
 teal = (60/255, 147/255, 194/255, 1)
@@ -176,7 +229,7 @@ generation_lifetime = combined_population_data[[
 generation_lifetime = generation_lifetime.set_index("Year")
 
 # plot lifetime damage by birth year
-start_year = 1975
+start_year = 2000
 end_year = 2100
 start_aggregation_year = 2015
 
@@ -185,30 +238,93 @@ cmap = cm.get_cmap('Reds')
 norm = colors.Normalize(vmin=0.0, vmax=1)
 
 
-def calculate_lifetime_aggregate(variable, start_year, end_year, generation_lifetime, data, start_aggregation_year, relative_gdp=False):
+def calculate_lifetime_aggregate(variable, start_year, end_year, generation_lifetime, data, start_aggregation_year, relative_gdp=False, gdp_share=1, average=False):
     lifetime_aggregate = {}
     for generation_year in range(start_year, end_year):
         end_lifetime = generation_lifetime.loc[generation_year].values[0]
         if end_lifetime >= start_aggregation_year:
             if relative_gdp:
                 lifetime_aggregate[generation_year] = np.nansum(
-                    data[variable][0:end_lifetime-start_aggregation_year]/data["gdp"][0:end_lifetime-start_aggregation_year])
+                    data[variable][0:end_lifetime-start_aggregation_year]/(data["gdp mean"][0:end_lifetime-start_aggregation_year]*gdp_share))*100
             else:
                 lifetime_aggregate[generation_year] = np.nansum(
                     data[variable][0:end_lifetime-start_aggregation_year])
         else:
             lifetime_aggregate[generation_year] = 0.0
+    if average:
+        lifetime_aggregate = {
+            key: value/(end_year-start_year) for key, value in lifetime_aggregate.items()}
     df = pd.DataFrame.from_dict(lifetime_aggregate, orient='index')
     df.index.name = 'generation_year'
     return df
 
 
-# same figure but weighting by baseline aggregated values
+# simpler plot, just plotting total cost relative to 3% of GDP per timestep, summed along lifetime of generation
+
+
+def plot_total_cost_relative_to_gdp(scenario_keys):
+    fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(
+        maxfigurewidth, maxfigurewidth/4))
+    new_cmap = plt.cm.get_cmap('seismic', 256)
+    new_norm = colors.TwoSlopeNorm(vmin=0, vcenter=3, vmax=6)
+
+    total_cost_relative_to_gdp = {}
+    for key in scenario_keys:
+        data = pd.read_csv(os.path.join(datapath, datafiles[key]))
+        abatement_cost_relative_to_gdp = calculate_lifetime_aggregate(
+            "costAbatement mean", start_year, end_year, generation_lifetime, data, start_aggregation_year, relative_gdp=True, gdp_share=1, average=True)
+        damage_cost_relative_to_gdp = calculate_lifetime_aggregate(
+            "costDamage mean", start_year, end_year, generation_lifetime, data, start_aggregation_year, relative_gdp=True, gdp_share=1, average=True)
+        total_cost_relative_to_gdp[key] = abatement_cost_relative_to_gdp + \
+            damage_cost_relative_to_gdp
+
+    key_index = len(scenario_keys)-1
+    for key in scenario_keys:
+        for i, damage in enumerate(total_cost_relative_to_gdp[key].values):
+            axs.add_patch(Rectangle((i+start_year, key_index-0.5),
+                                    1, 1, fill=True, color=new_cmap(new_norm(damage))))
+        # add a horizontal line at the bottom of the subplot
+        axs.axhline(y=key_index-0.5, color='black', linewidth=0.5)
+        key_index -= 1
+
+    axs.set_xlabel('Generation Year')
+    axs.set_ylabel('Scenario')
+    axs.set_xlim([start_year, end_year])
+    axs.set_ylim([-0.5, len(scenario_keys)-0.5])
+    axs.set_yticks(range(len(scenario_keys)))
+    axs.set_yticklabels(reversed(scenario_keys))
+
+    # Add colorbar
+    # [left, bottom, width, height]
+    cax = fig.add_axes([1.0125, 0.25, 0.03, 0.7])
+    cb = colorbar.ColorbarBase(
+        cax, cmap=new_cmap, norm=new_norm, orientation='vertical')
+    cb.set_label('Total Cost relative to GDP')
+
+    plt.tight_layout()
+    return fig
+
+
+deterministic_scenario_keys = ["DICE-2016-R",
+                               "Abatement cost funding", "3% GDP limit"]
+
+plot_total_cost_relative_to_gdp(deterministic_scenario_keys)
+plt.savefig(os.path.join(
+    figurepath, "deterministic_total_cost_relative_to_gdp.pdf"), dpi=300, bbox_inches='tight')
+
+stochastic_scenario_keys = [
+    "Stochastic DICE", "Stochastic abatement cost funding", "Stochastic 3% GDP limit"]
+plot_total_cost_relative_to_gdp(stochastic_scenario_keys)
+plt.savefig(os.path.join(
+    figurepath, "stochastic_total_cost_relative_to_gdp.pdf"), dpi=300, bbox_inches='tight')
+
+
+# legacy more complex weighting plot
 
 weight_key = "3% GDP limit"
 # sort remaining keys dice first, abatement second, non linear third
 remaining_keys = ["DICE-2016-R",
-                  "Abatement cost funding", "Non-linear discounting"]
+                  "Abatement cost funding", "3% GDP limit"]  # , "Stochastic DICE", "Stochastic abatement cost funding", "Stochastic 3% GDP limit"
 
 # create a figure with three subplots
 fig, axs = plt.subplots(nrows=4, ncols=1, figsize=(
