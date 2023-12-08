@@ -201,13 +201,6 @@ for scenarioname in scenariosets:
 
 # load population shares from materials directory
 materialpath = os.path.join(basepath, "material")
-population_shares = pd.read_csv(os.path.join(
-    materialpath, "population_shares_by_birth_year.csv"), index_col=0)
-# create plot up to 2100, showing on x axis year born, on y axis damage weighted by share of population alive born in x year
-# calculate the share of the population alive born in each year
-population_shares = pd.read_csv(os.path.join(
-    materialpath, "population_shares_by_birth_year.csv"), index_col=0).T
-materialpath = os.path.join(basepath, "material")
 relevant_columns = ["Year", "Total Population, as of 1 January (thousands)", "Births (thousands)", "Life Expectancy at Birth, both sexes (years)",
                     "Infant Mortality Rate (infant deaths per 1,000 live births)", "Under-Five Deaths, under age 5 (thousands)"]
 
@@ -218,30 +211,28 @@ population_data["Medium variant"] = pd.read_excel(os.path.join(
     materialpath, "WPP2022_GEN_F01_DEMOGRAPHIC_INDICATORS_COMPACT_REV1.xlsx"), sheet_name="Medium variant", header=0, skiprows=range(0, 16), nrows=79)
 # combine population data frames by year
 combined_population_data = pd.concat([population_data["Estimates"][relevant_columns],
-                                     population_data["Medium variant"][relevant_columns]], ignore_index=True)
-combined_population_data = combined_population_data.sort_values(by="Year")
+                                     population_data["Medium variant"][relevant_columns]], ignore_index=True).sort_values(by="Year")
 combined_population_data["Generational Lifetime Estimate"] = (
     combined_population_data["Year"] + combined_population_data["Life Expectancy at Birth, both sexes (years)"]).astype(int)
 
 # extract df with generation lifetime expectation
 generation_lifetime = combined_population_data[[
-    "Year", "Generational Lifetime Estimate"]]
-generation_lifetime = generation_lifetime.set_index("Year")
+    "Year", "Generational Lifetime Estimate"]].set_index("Year")
+
 
 # plot lifetime damage by birth year
 start_year = 2015
-end_year = 2100
+end_year = 2200
 start_aggregation_year = 2015
-
-
-cmap = cm.get_cmap('Reds')
-norm = colors.Normalize(vmin=0.0, vmax=1)
-
 
 def calculate_lifetime_aggregate(variable, start_year, end_year, generation_lifetime, data, start_aggregation_year, relative_gdp=False, gdp_share=1, average=False):
     lifetime_aggregate = {}
     for generation_year in range(start_year, end_year):
-        end_lifetime = generation_lifetime.loc[generation_year].values[0]
+        if generation_year>2100:
+            end_lifetime = generation_lifetime.loc[2100].values[0] + generation_year-2100 #just extending with static life expectancy
+        else:
+            end_lifetime = generation_lifetime.loc[generation_year].values[0]
+        
         if end_lifetime >= start_aggregation_year:
             start_index = max(0,generation_year-start_aggregation_year)
             end_index = end_lifetime-start_aggregation_year
@@ -268,7 +259,7 @@ def plot_total_cost_relative_to_gdp(scenario_keys):
     fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(
         maxfigurewidth, maxfigurewidth/4))
     new_cmap = plt.cm.get_cmap('seismic', 256)
-    new_norm = colors.TwoSlopeNorm(vmin=1.5, vcenter=3.5, vmax=5.5)
+    new_norm = colors.TwoSlopeNorm(vmin=0.0, vcenter=3.0, vmax=6.0)
 
     total_cost_relative_to_gdp = {}
     for key in scenario_keys:
@@ -297,7 +288,6 @@ def plot_total_cost_relative_to_gdp(scenario_keys):
     axs.set_yticklabels(reversed(scenario_keys))
 
     # Add colorbar
-    # [left, bottom, width, height]
     cax = fig.add_axes([1.0125, 0.25, 0.03, 0.7])
     cb = colorbar.ColorbarBase(
         cax, cmap=new_cmap, norm=new_norm, orientation='vertical')
@@ -315,7 +305,7 @@ plt.savefig(os.path.join(
     figurepath, "deterministic_total_cost_relative_to_gdp.pdf"), dpi=300, bbox_inches='tight')
 
 stochastic_scenario_keys = [
-    "Stochastic DICE", "Stochastic abatement cost funding", "Stochastic 3% GDP limit"]
+    "Stochastic DICE", "Stochastic abatement cost funding", "Stochastic 3% GDP limit", "3% GDP limit"]
 plot_total_cost_relative_to_gdp(stochastic_scenario_keys)
 plt.savefig(os.path.join(
     figurepath, "stochastic_total_cost_relative_to_gdp.pdf"), dpi=300, bbox_inches='tight')
