@@ -28,7 +28,7 @@ smallfigurewidth = maxfigurewidth / 3
 mediumfigurewidth = maxfigurewidth / 2
 
 # TODO: adjust these path to your data
-basepath = "/home/quante/Documents/projects/IAM-stochasticity-discounting/"
+basepath = "/home/quante/Documents/projects/intergenerational-inequality-financing-cost/"
 datapath = os.path.join(basepath, "data")
 
 figurepath = os.path.join(basepath, "figures")
@@ -229,7 +229,7 @@ generation_lifetime = combined_population_data[[
 generation_lifetime = generation_lifetime.set_index("Year")
 
 # plot lifetime damage by birth year
-start_year = 2000
+start_year = 2015
 end_year = 2100
 start_aggregation_year = 2015
 
@@ -243,17 +243,19 @@ def calculate_lifetime_aggregate(variable, start_year, end_year, generation_life
     for generation_year in range(start_year, end_year):
         end_lifetime = generation_lifetime.loc[generation_year].values[0]
         if end_lifetime >= start_aggregation_year:
+            start_index = max(0,generation_year-start_aggregation_year)
+            end_index = end_lifetime-start_aggregation_year
             if relative_gdp:
                 lifetime_aggregate[generation_year] = np.nansum(
-                    data[variable][0:end_lifetime-start_aggregation_year]/(data["gdp mean"][0:end_lifetime-start_aggregation_year]*gdp_share))*100
+                    data[variable][start_index:end_index]/(data["gdp mean"][start_index:end_index]*gdp_share))*100
             else:
                 lifetime_aggregate[generation_year] = np.nansum(
-                    data[variable][0:end_lifetime-start_aggregation_year])
+                    data[variable][start_index:end_index])
         else:
             lifetime_aggregate[generation_year] = 0.0
     if average:
         lifetime_aggregate = {
-            key: value/(end_year-start_year) for key, value in lifetime_aggregate.items()}
+            key: value/(end_index-start_index) for key, value in lifetime_aggregate.items()}
     df = pd.DataFrame.from_dict(lifetime_aggregate, orient='index')
     df.index.name = 'generation_year'
     return df
@@ -266,7 +268,7 @@ def plot_total_cost_relative_to_gdp(scenario_keys):
     fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(
         maxfigurewidth, maxfigurewidth/4))
     new_cmap = plt.cm.get_cmap('seismic', 256)
-    new_norm = colors.TwoSlopeNorm(vmin=0, vcenter=3, vmax=6)
+    new_norm = colors.TwoSlopeNorm(vmin=1.5, vcenter=3.5, vmax=5.5)
 
     total_cost_relative_to_gdp = {}
     for key in scenario_keys:
@@ -287,7 +289,7 @@ def plot_total_cost_relative_to_gdp(scenario_keys):
         axs.axhline(y=key_index-0.5, color='black', linewidth=0.5)
         key_index -= 1
 
-    axs.set_xlabel('Generation Year')
+    axs.set_xlabel('Birth Year')
     axs.set_ylabel('Scenario')
     axs.set_xlim([start_year, end_year])
     axs.set_ylim([-0.5, len(scenario_keys)-0.5])
