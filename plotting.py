@@ -191,34 +191,10 @@ def plot_subplots(scenario_inputs, timelimit=250):
 scenariosets = {"deterministic_stochastic": ["DICE-2016-R", "Stochastic DICE"], "deterministic": ["DICE-2016-R", "Abatement cost funding", "3% GDP limit"],
                 "stochastic": ["Stochastic DICE", "Stochastic abatement cost funding", "Stochastic 3% GDP limit"]}
 
-for scenarioname in scenariosets:
-    fig = plot_subplots(scenariosets[scenarioname])
-    plt.savefig(os.path.join(
-        figurepath, f"pathways_panel_{scenarioname}.pdf"), dpi=300, bbox_inches='tight')
 
-
-# figure including generational exposure
-
-# load population shares from materials directory
 materialpath = os.path.join(basepath, "material")
-relevant_columns = ["Year", "Total Population, as of 1 January (thousands)", "Births (thousands)", "Life Expectancy at Birth, both sexes (years)",
-                    "Infant Mortality Rate (infant deaths per 1,000 live births)", "Under-Five Deaths, under age 5 (thousands)"]
-
-population_data = {}
-population_data["Estimates"] = pd.read_excel(os.path.join(
-    materialpath, "WPP2022_GEN_F01_DEMOGRAPHIC_INDICATORS_COMPACT_REV1.xlsx"), sheet_name="Estimates", header=0, skiprows=range(0, 16), nrows=72)
-population_data["Medium variant"] = pd.read_excel(os.path.join(
-    materialpath, "WPP2022_GEN_F01_DEMOGRAPHIC_INDICATORS_COMPACT_REV1.xlsx"), sheet_name="Medium variant", header=0, skiprows=range(0, 16), nrows=79)
-# combine population data frames by year
-combined_population_data = pd.concat([population_data["Estimates"][relevant_columns],
-                                     population_data["Medium variant"][relevant_columns]], ignore_index=True).sort_values(by="Year")
-combined_population_data["Generational Lifetime Estimate"] = (
-    combined_population_data["Year"] + combined_population_data["Life Expectancy at Birth, both sexes (years)"]).astype(int)
-
-# extract df with generation lifetime expectation
-generation_lifetime = combined_population_data[[
-    "Year", "Generational Lifetime Estimate"]].set_index("Year")
-
+generation_lifetime = pd.read_csv(os.path.join(
+    materialpath, "LifeExpectancyByBirthYear.csv"), index_col=0)
 
 # plot lifetime damage by birth year
 start_year = 2015
@@ -228,10 +204,10 @@ start_aggregation_year = 2015
 def calculate_lifetime_aggregate(variable, start_year, end_year, generation_lifetime, data, start_aggregation_year, relative_gdp=False, gdp_share=1, average=False):
     lifetime_aggregate = {}
     for generation_year in range(start_year, end_year):
-        if generation_year>2100:
-            end_lifetime = generation_lifetime.loc[2100].values[0] + generation_year-2100 #just extending with static life expectancy
+        if generation_year > 2100:
+            end_lifetime = int(generation_lifetime.loc[2100].values[0]) + generation_year  # just extending with static life expectancy
         else:
-            end_lifetime = generation_lifetime.loc[generation_year].values[0]
+            end_lifetime = int(generation_lifetime.loc[generation_year].values[0]) + generation_year
         
         if end_lifetime >= start_aggregation_year:
             start_index = max(0,generation_year-start_aggregation_year)
